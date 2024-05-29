@@ -18,26 +18,28 @@ class CloudFrontDemoStack(Stack):
         #S3 buckets
         cached_content_bucket = s3.Bucket(
             self,"cachedcontentbucket",
+            bucket_name="cachedcontentbuckets3",
             website_index_document="index.html",
             removal_policy=RemovalPolicy.DESTROY
         )
 
         uncached_content_bucket = s3.Bucket(
             self,"uncachedcontentbucket",
+            bucket_name="uncachedcontentbuckets3",
             website_index_document="index.html",
             website_error_document="error.html",  
             block_public_access=s3.BlockPublicAccess(block_public_policy=False),
             removal_policy=RemovalPolicy.DESTROY
         )
 
-        #CDN
-        #Allow cloud front to access the cached content s3 bucket
+        #Allow public access
         uncached_content_bucket.add_to_resource_policy(iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
             actions=["s3:GetObject"],
             resources=[uncached_content_bucket.arn_for_objects("*")],
             principals=[iam.AnyPrincipal()],
         ))
+         #Allow cloud front to access the cached content s3 bucket
         cached_content_bucket.add_to_resource_policy(iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
             actions=["s3:GetObject"],
@@ -57,7 +59,7 @@ class CloudFrontDemoStack(Stack):
                             is_default_behavior=True,
                             min_ttl=Duration.seconds(1),  
                             default_ttl=Duration.seconds(5),  
-                            max_ttl=Duration.seconds(10), 
+                            max_ttl=Duration.seconds(30), 
                             allowed_methods=cloudfront.CloudFrontAllowedMethods.GET_HEAD
                         )
                     ]
