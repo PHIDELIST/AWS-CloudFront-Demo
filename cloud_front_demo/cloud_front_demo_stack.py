@@ -1,7 +1,11 @@
 from aws_cdk import (
-    # Duration,
     Stack,
-    # aws_sqs as sqs,
+    aws_cloudfront as cloudfront,
+    aws_s3 as s3,
+    RemovalPolicy,
+    cfnOutput,
+    aws_iam as iam,
+    core
 )
 from constructs import Construct
 
@@ -11,9 +15,56 @@ class CloudFrontDemoStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # The code that defines your stack goes here
+        #S3 buckets
+        cached_content_bucket = s3.Bucket(
+            self,"cachedcontentbucket",
+            website_index_document="index.html",
+            removal_policy=RemovalPolicy.DESTROY
+        )
 
-        # example resource
-        # queue = sqs.Queue(
-        #     self, "CloudFrontDemoQueue",
-        #     visibility_timeout=Duration.seconds(300),
-        # )
+        uncached_content_bucket = s3.Bucket(
+            self,"uncachedcontentbucket",
+            website_index_document="index.html",
+            website_error_document="error.html",  
+            public_read_access=True, 
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
+        #CDN
+        #Allow cloud front to access the cached content s3 bucket
+        cached_content_bucket.add_to_resource_policy(iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=["s3:GetObject"],
+            resources=[cached_content_bucket.arn_for_objects("*")],
+            principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],
+        ))
+        #Website Cloudfront distribution
+        cloudfront_distribution = cloudfront.CloudFrontWebDistribution(self, "cachedWebsiteDistribution",
+            origin_configs=[
+                cloudfront.SourceConfiguration(
+                    s3_origin_source=cloudfront.S3OriginConfig(
+                        s3_bucket_source=cached_content_bucket,
+                        origin_access_identity=cloudfront.OriginAccessIdentity(self, 'OAI')
+                    ),
+                    behaviors=[
+                        cloudfront.Behavior(
+                            is_default_behavior=True,
+                            min_ttl=core.Duration.seconds(10),  
+                            allowed_methods=cloudfront.CloudFrontAllowedMethods.GET_HEAD
+                        )
+                    ]
+                )
+            ],
+            error_configurations=[
+                cloudfront.CfnDistribution.CustomErrorResponseProperty(
+                    error_code=403,
+                    response_code=200,
+                    response_page_path="/index.html"
+                )
+            ]
+        )
+
+        #outputs
+        cfnOutput(self,"website cloudfront url", value=cloudfront_distribution.distribution_domain_name)
+        cfnOutput(self,"s3bucketwebsiteurl", value=uncached_content_bucket.bucket_website_url)
+
