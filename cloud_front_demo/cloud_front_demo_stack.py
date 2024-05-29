@@ -3,9 +3,9 @@ from aws_cdk import (
     aws_cloudfront as cloudfront,
     aws_s3 as s3,
     RemovalPolicy,
-    cfnOutput,
+    CfnOutput,
     aws_iam as iam,
-    core
+    Duration
 )
 from constructs import Construct
 
@@ -26,12 +26,18 @@ class CloudFrontDemoStack(Stack):
             self,"uncachedcontentbucket",
             website_index_document="index.html",
             website_error_document="error.html",  
-            public_read_access=True, 
+            block_public_access=s3.BlockPublicAccess(block_public_policy=False),
             removal_policy=RemovalPolicy.DESTROY
         )
 
         #CDN
         #Allow cloud front to access the cached content s3 bucket
+        uncached_content_bucket.add_to_resource_policy(iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=["s3:GetObject"],
+            resources=[uncached_content_bucket.arn_for_objects("*")],
+            principals=[iam.AnyPrincipal()],
+        ))
         cached_content_bucket.add_to_resource_policy(iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
             actions=["s3:GetObject"],
@@ -49,7 +55,9 @@ class CloudFrontDemoStack(Stack):
                     behaviors=[
                         cloudfront.Behavior(
                             is_default_behavior=True,
-                            min_ttl=core.Duration.seconds(10),  
+                            min_ttl=Duration.seconds(1),  
+                            default_ttl=Duration.seconds(5),  
+                            max_ttl=Duration.seconds(10), 
                             allowed_methods=cloudfront.CloudFrontAllowedMethods.GET_HEAD
                         )
                     ]
@@ -65,6 +73,6 @@ class CloudFrontDemoStack(Stack):
         )
 
         #outputs
-        cfnOutput(self,"website cloudfront url", value=cloudfront_distribution.distribution_domain_name)
-        cfnOutput(self,"s3bucketwebsiteurl", value=uncached_content_bucket.bucket_website_url)
+        CfnOutput(self,"website cloudfront url", value=cloudfront_distribution.distribution_domain_name)
+        CfnOutput(self,"s3bucketwebsiteurl", value=uncached_content_bucket.bucket_website_url)
 

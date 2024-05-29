@@ -56,3 +56,6 @@ command.
  * `cdk docs`        open CDK documentation
 
 Enjoy!
+
++ Checking s3 uncached website response time ```ping cloudfrontdemostack-uncachedcontentbucket609ee245-eigkkesrh86h.s3-website-us-east-1.amazonaws.com```
++ Checking cloudfront respsne ```ping d1nclf993saoex.cloudfront.net```
