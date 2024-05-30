@@ -17,15 +17,15 @@ class CloudFrontDemoStack(Stack):
         # The code that defines your stack goes here
         #S3 buckets
         cached_content_bucket = s3.Bucket(
-            self,"cachedcontentbucket",
-            bucket_name="cachedcontentbuckets3",
+            self,"cachecontentbucket",
+            bucket_name="cachecontentbuckets3",
             website_index_document="index.html",
             removal_policy=RemovalPolicy.DESTROY
         )
 
         uncached_content_bucket = s3.Bucket(
-            self,"uncachedcontentbucket",
-            bucket_name="uncachedcontentbuckets3",
+            self,"uncachecontentbucket",
+            bucket_name="uncachecontentbuckets3",
             website_index_document="index.html",
             website_error_document="error.html",  
             block_public_access=s3.BlockPublicAccess(block_public_policy=False),
