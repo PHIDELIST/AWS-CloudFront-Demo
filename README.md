@@ -57,5 +57,5 @@ command.
 
 Enjoy!
 
-+ Checking s3 uncached website response time ```ping cloudfrontdemostack-uncachedcontentbucket609ee245-eigkkesrh86h.s3-website-us-east-1.amazonaws.com```
-+ Checking cloudfront respsne ```ping d1nclf993saoex.cloudfront.net```
++ Checking s3 uncached website response time ```curl -w "TTFB: %{time_starttransfer}| Total time: %{time_total} \n" -o /dev/null -vsL http://uncachecontentbuckets3.s3-website.me-central-1.amazonaws.com/```
++ Checking cloudfront respsne ```curl -w "TTFB: %{time_starttransfer}| Total time: %{time_total} \n" -o /dev/null -vsL https://d3tyxu6kln8dh7.cloudfront.net/```
