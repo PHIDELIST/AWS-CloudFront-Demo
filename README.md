@@ -4,7 +4,7 @@
 ### Cloudfront Website
 ![s3website](image.png)
 
-### SE website
+### S3 website
 ![cloudfront](image-1.png)
 
 
