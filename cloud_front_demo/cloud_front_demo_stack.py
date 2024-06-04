@@ -5,7 +5,8 @@ from aws_cdk import (
     RemovalPolicy,
     CfnOutput,
     aws_iam as iam,
-    Duration
+    Duration,
+    aws_cloudfront_origins as origins
 )
 from constructs import Construct
 
@@ -15,66 +16,79 @@ class CloudFrontDemoStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # The code that defines your stack goes here
-        #S3 buckets
+        # S3 buckets
         cached_content_bucket = s3.Bucket(
-            self,"cachecontentbucket",
-            bucket_name="cachecontentbuckets3",
+            self,"cachedcontentbucket",
+            bucket_name="cachedcontentbuckets3",
             website_index_document="index.html",
-            removal_policy=RemovalPolicy.DESTROY
+            removal_policy=RemovalPolicy.DESTROY,
+            block_public_access=s3.BlockPublicAccess(block_public_policy=False),
         )
 
         uncached_content_bucket = s3.Bucket(
-            self,"uncachecontentbucket",
-            bucket_name="uncachecontentbuckets3",
+            self,"uncachedcontentbucket",
+            bucket_name="uncachedcontentbuckets3",
             website_index_document="index.html",
             website_error_document="error.html",  
             block_public_access=s3.BlockPublicAccess(block_public_policy=False),
             removal_policy=RemovalPolicy.DESTROY
         )
-
-        #Allow public access
+        fallback_website_bucket = s3.Bucket(
+                self,"fallback_website_bucket",
+                bucket_name="fallbackwebsitebuckets3",
+                website_index_document="index.html",
+                removal_policy=RemovalPolicy.DESTROY,
+                block_public_access=s3.BlockPublicAccess(block_public_policy=False),
+            )
+    
+        # Allow public access to the uncached content bucket
         uncached_content_bucket.add_to_resource_policy(iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
             actions=["s3:GetObject"],
             resources=[uncached_content_bucket.arn_for_objects("*")],
             principals=[iam.AnyPrincipal()],
         ))
-         #Allow cloud front to access the cached content s3 bucket
+
+        # Allow CloudFront to access the cached content S3 bucket
         cached_content_bucket.add_to_resource_policy(iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
             actions=["s3:GetObject"],
             resources=[cached_content_bucket.arn_for_objects("*")],
-            principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],
+            principals=[iam.AnyPrincipal()],
         ))
-        #Website Cloudfront distribution
-        cloudfront_distribution = cloudfront.CloudFrontWebDistribution(self, "cachedWebsiteDistribution",
-            origin_configs=[
-                cloudfront.SourceConfiguration(
-                    s3_origin_source=cloudfront.S3OriginConfig(
-                        s3_bucket_source=cached_content_bucket,
-                        origin_access_identity=cloudfront.OriginAccessIdentity(self, 'OAI')
-                    ),
-                    behaviors=[
-                        cloudfront.Behavior(
-                            is_default_behavior=True,
-                            min_ttl=Duration.seconds(1),  
-                            default_ttl=Duration.seconds(5),  
-                            max_ttl=Duration.seconds(30), 
-                            allowed_methods=cloudfront.CloudFrontAllowedMethods.GET_HEAD
-                        )
-                    ]
-                )
-            ],
-            error_configurations=[
-                cloudfront.CfnDistribution.CustomErrorResponseProperty(
-                    error_code=403,
-                    response_code=200,
+        # Allow CloudFront to access the fallback S3 bucket
+        fallback_website_bucket.add_to_resource_policy(iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=["s3:GetObject"],
+            resources=[fallback_website_bucket.arn_for_objects("*")],
+            principals=[iam.AnyPrincipal()],
+        ))
+        # Website CloudFront distribution
+        cloudfront_distribution = cloudfront.Distribution(self, "cachedWebsiteDistribution",
+            default_behavior=cloudfront.BehaviorOptions(
+                origin=origins.OriginGroup(
+                    primary_origin=origins.S3Origin(cached_content_bucket, 
+                                       origin_access_identity=cloudfront.OriginAccessIdentity(self, 'OAI')),
+                    fallback_origin=origins.S3Origin( fallback_website_bucket, 
+                                        origin_access_identity=cloudfront.OriginAccessIdentity(self, 'fallbackAOAI')),
+                    fallback_status_codes=[404,500,502,503,504]
+                ),
+                allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+                cache_policy= cloudfront.CachePolicy.CACHING_OPTIMIZED,
+                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                origin_request_policy=cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN
+            ),
+            error_responses=[
+                cloudfront.ErrorResponse(
+                    http_status=403,
+                    response_http_status=200,
                     response_page_path="/error.html"
                 )
-            ]
+            ],
+            price_class=cloudfront.PriceClass.PRICE_CLASS_ALL
         )
 
-        #outputs
-        CfnOutput(self,"website cloudfront url", value=cloudfront_distribution.distribution_domain_name)
-        CfnOutput(self,"s3bucketwebsiteurl", value=uncached_content_bucket.bucket_website_url)
+        # Outputs
+        CfnOutput(self, "websiteCloudFrontUrl", value=cloudfront_distribution.distribution_domain_name)
+        CfnOutput(self, "s3BucketWebsiteUrl", value=uncached_content_bucket.bucket_website_url)
 
